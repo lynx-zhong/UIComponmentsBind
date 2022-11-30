@@ -1,12 +1,8 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using UnityEditorInternal;
-using System;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Linq;
 
 namespace ComponentsBind
 {
@@ -14,32 +10,21 @@ namespace ComponentsBind
     public class UIComponentsBindInspector : Editor
     {
         private readonly int singleItemHeight = 53;
-        private readonly int singlePropertyHeight = 20;
-        private static Dictionary<string, string> commonCScriptToLuaScript = new Dictionary<string, string>()
-        {
-            {"UnityEngine.UI.Text","UIText"},
-            {"UnityEngine.UI.Image","UIImage"},
-            {"UnityEngine.UI.Button","UIButton"},
-        };
+        private readonly int singlePropertyHeight = 20; 
 
-        private static Dictionary<string, string> customCScriptToLuaScript = new Dictionary<string, string>()
-        {
-            {"UnityEngine.UI.Text","UIText"},
-            {"UnityEngine.UI.Image","UIImage"},
-            {"UnityEngine.UI.Button","UIButton"},
-        };
-    
         SerializedProperty elements;
         ReorderableList reorderableList;
-        UIComponentsBind UIComponentsBind;
-
-
+        UIComponentsBind componentsBind;
 
         private void OnEnable()
         {
             elements = serializedObject.FindProperty("elements");
             reorderableList = new ReorderableList(serializedObject, elements, true, true, true, true);
-            UIComponentsBind = target as UIComponentsBind;
+        }
+
+        public override void OnInspectorGUI()
+        {
+            componentsBind = target as UIComponentsBind;
 
             reorderableList.elementHeight = singleItemHeight;
 
@@ -48,19 +33,21 @@ namespace ComponentsBind
             reorderableList.onAddCallback = DrawOnAddCallBack;
             reorderableList.onRemoveCallback = DrawOnRemoveCallBack;
 
-            // copyLabel.fontSize = 20;
-            // copyLabel.normal.textColor = new Color(46f/256f, 163f/256f, 256f/256f, 256f/256f);
-        }
-
-        public override void OnInspectorGUI()
-        {
             DragControl();
 
             serializedObject.Update();
             reorderableList.DoLayoutList();
             serializedObject.ApplyModifiedProperties();
 
-            WriteCode();
+            WriteLuaCode();
+        }
+
+        private void OnDisable() 
+        {
+            if (componentsBind)
+            {
+                EditorUtility.SetDirty(componentsBind);
+            }
         }
 
         void DragControl() 
@@ -117,7 +104,7 @@ namespace ComponentsBind
             EditorGUI.PropertyField(rectFieldName, fieldName, GUIContent.none);
             EditorGUI.PropertyField(rectCompont, compont, GUIContent.none);
     
-            Element curElement = UIComponentsBind.elements[index];
+            Element curElement = componentsBind.elements[index];
             Component curElementSelectedComponent = curElement.selectedComponent;
             if (curElementSelectedComponent)
             {
@@ -127,12 +114,21 @@ namespace ComponentsBind
                 int newSelectIndex = EditorGUI.Popup(rectCompontEnum, curElement.selectedComponentIndex, tempCompontNames.ToArray());
                 if (newSelectIndex != curElement.selectedComponentIndex)
                 {
-                    curElement.selectedComponentIndex = newSelectIndex;
+                    curElement.SetSelectedComponentIndex(newSelectIndex);
                     curElement.fieldName = curElement.selectedComponent.name + tempCompontNames[curElement.selectedComponentIndex];
                 }
                 else if(curElement.fieldName == string.Empty)
                 {
                     curElement.fieldName = curElement.selectedComponent.name + tempCompontNames[curElement.selectedComponentIndex];
+                }
+
+                if (curElement.selectedComponentIndex >= allComponent.Length)
+                {
+                    curElement.SetSelectedComponentIndex(allComponent.Length - 1);
+                }
+                else
+                {
+                    curElement.SetSelectedComponentIndex(curElement.selectedComponentIndex);
                 }
 
                 curElement.selectedComponent = allComponent[curElement.selectedComponentIndex];
@@ -142,6 +138,15 @@ namespace ComponentsBind
                 curElement.fieldName = string.Empty;
             }
         }
+
+        // string GetComponentName(Element curElement,List<string> tempCompontNames)
+        // {
+        //     if (curElement.selectedComponent.name == "aa")
+        //     {
+                
+        //     }
+        //     return curElement.selectedComponent.name + tempCompontNames[curElement.selectedComponentIndex];
+        // }
 
         List<string> GetElementAllComponentsStringList(Component[] allComponent)
         {
@@ -162,19 +167,24 @@ namespace ComponentsBind
 
         void DrawOnAddCallBack(ReorderableList list)
         {
-            UIComponentsBind.elements.Add(new Element());
+            componentsBind.elements.Add(new Element());
         }
 
         void DrawOnRemoveCallBack(ReorderableList list)
         {
-            UIComponentsBind.elements.RemoveAt(list.index);
+            componentsBind.elements.RemoveAt(list.index);
         }
 
         void AddElementsToList(GameObject component) 
         {
-            for (int i = 0; i < UIComponentsBind.elements.Count; i++)
+            if (componentsBind.elements == null)
             {
-                Element element = UIComponentsBind.elements[i];
+                componentsBind.elements = new List<Element>();
+            }
+
+            for (int i = 0; i < componentsBind.elements.Count; i++)
+            {
+                Element element = componentsBind.elements[i];
                 // Debug.LogError(string.Format("i:  {0}    ele"));
                 if (element.selectedComponent == null)
                 {
@@ -183,11 +193,10 @@ namespace ComponentsBind
                 }
             }
 
-
-            UIComponentsBind.elements.Add(new Element(component.GetComponent<Component>()));
+            componentsBind.elements.Add(new Element(component.GetComponent<Component>()));
         }
 
-        void WriteCode()
+        void WriteLuaCode()
         {
             EditorGUILayout.Space();
 
@@ -195,111 +204,20 @@ namespace ComponentsBind
 
             if (GUILayout.Button("copy code for lua init"))
             {
-                WriteLuaInit();
+                LuaCodeExport.WriteLuaInit(componentsBind);
             }
 
             GUI.color = Color.cyan;
             if (GUILayout.Button("copy code for lua unInit"))
             {
-                WriteLuaUnInit();
+                LuaCodeExport.WriteLuaUnInit(componentsBind);
             }
-        }
 
-
-        #region 写lua
-        void WriteLuaInit()
-        {
-            StringBuilder luaCode = new StringBuilder();
-
-            for (int i = 0; i < UIComponentsBind.elements.Count; i++)
+            GUI.color = Color.green;
+            if (GUILayout.Button("copy code for lua buttonFunction"))
             {
-                Element element = UIComponentsBind.elements[i];
-                WriteLuaInitPathLine(element, luaCode);
-            }
-
-            luaCode.AppendLine();
-
-            for (int i = 0; i < UIComponentsBind.elements.Count; i++)
-            {
-                Element element = UIComponentsBind.elements[i];
-                WriteLuaInitLine(element, luaCode);
-            }
-
-            EditorGUIUtility.systemCopyBuffer = luaCode.ToString();
-        }
-
-        void WriteLuaInitPathLine(Element element,StringBuilder luaCode) 
-        {
-            if (!element.selectedComponent)
-                return;
-
-            string filedStr = element.fieldName == string.Empty ? "Undefined" : FirstCharToLower(element.fieldName);
-            StringBuilder nodePath = new StringBuilder();
-            nodePath.Append(element.selectedComponent.gameObject.name);
-            GetNodePath(element.selectedComponent,nodePath);
-
-            luaCode.AppendLine(string.Format("self._{0}Path = \"{1}\"", filedStr,nodePath.ToString()));
-        }
-
-        void GetNodePath(Component component,StringBuilder nodePath)
-        {
-            UIComponentsBind parentBind = component.transform.parent.GetComponent<UIComponentsBind>();
-            if (parentBind == null)
-            {
-                nodePath.Insert(0,component.gameObject.name + "/");
-                GetNodePath(component.transform.parent,nodePath);
-                return;
+                LuaCodeExport.WriteLuaButtonFunction(componentsBind);
             }
         }
-
-        void WriteLuaInitLine(Element element,StringBuilder luaCode) 
-        {
-            if (!element.selectedComponent)
-                return;
-
-            string filedStr = element.fieldName == string.Empty ? "Undefined" : FirstCharToLower(element.fieldName);
-            string componentFullName = Regex.Replace(element.selectedComponent.ToString(), @"(.*\()(.*)(\).*)", "$2");
-            
-            if (commonCScriptToLuaScript.ContainsKey(componentFullName))
-                luaCode.AppendLine(string.Format("self._{0} = self:AddCompont({1},self._{2}Path)", filedStr,commonCScriptToLuaScript[componentFullName],filedStr));
-
-            else if(customCScriptToLuaScript.ContainsKey(componentFullName))
-                luaCode.AppendLine(string.Format("self._{0} = {1}", filedStr,customCScriptToLuaScript[componentFullName]));
-
-            else
-                luaCode.AppendLine(string.Format("self._{0} = \"未定义该类型的代码的获取方式\"", filedStr));
-        }
-
-        void WriteLuaUnInit()
-        {
-            StringBuilder luaCode = new StringBuilder();
-
-            for (int i = 0; i < UIComponentsBind.elements.Count; i++)
-            {
-                Element element = UIComponentsBind.elements[i];
-                WriteLuaUnInitLine(element, luaCode);
-            }
-
-            EditorGUIUtility.systemCopyBuffer = luaCode.ToString();
-        }
-
-        void WriteLuaUnInitLine(Element element,StringBuilder luaCode)
-        {
-
-        }
-
-        #endregion
-
-        #region 公用
-
-        string FirstCharToLower(string input)
-        {
-            if (String.IsNullOrEmpty(input))
-                return input;
-
-            string str = input.First().ToString().ToLower() + input.Substring(1);
-            return str;
-        }
-        #endregion
     }
 }

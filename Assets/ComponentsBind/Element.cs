@@ -4,11 +4,12 @@ using UnityEngine;
 
 namespace ComponentsBind
 {
-    
+
     [Serializable]
     public class Element
     {
-        public Element(){}
+        public Element() {}
+
         public Element(Component comp)
         {
             selectedComponent = comp;
@@ -17,6 +18,12 @@ namespace ComponentsBind
         public string fieldName = string.Empty;
         public Component selectedComponent;
         public int selectedComponentIndex = 0;
+
+
+        public void SetSelectedComponentIndex(int index) 
+        {
+            selectedComponentIndex = index;
+        }
         
 
 
