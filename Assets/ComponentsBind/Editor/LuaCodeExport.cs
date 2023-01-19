@@ -22,8 +22,9 @@ namespace ComponentsBind
             {"UnityEngine.UI.Button","UIButton"},
             {"UnityEngine.UI.Slider","UISlider"},
             {"TMPro.TextMeshProUGUI","UITextMeshProUGUI"},
-            {"UnityEngine.Animation","UIAnimation"},
+            {"Extends.UI.UIAnimation","UIAnimation"},
             {"Extends.UI.ExToggle","UIExToggle"},
+            {"UnityEngine.UI.Dropdown","UIDragdown"},
         };
 
         private static List<string> commonDestoryCScriptToLuaScript = new List<string>()
@@ -39,7 +40,7 @@ namespace ComponentsBind
             for (int i = 0; i < componentsBind.elements.Count; i++)
             {
                 Element element = componentsBind.elements[i];
-                WriteLuaInitPathLine(element, luaCode);
+                WriteLuaInitPathLine(componentsBind,element, luaCode);
             }
 
             luaCode.AppendLine();
@@ -67,7 +68,7 @@ namespace ComponentsBind
             return luaCode;
         }
 
-        public static void WriteLuaInitPathLine(Element element,StringBuilder luaCode) 
+        public static void WriteLuaInitPathLine(UIComponentsBind componentsBind,Element element,StringBuilder luaCode) 
         {
             if (!element.selectedComponent)
                 return;
@@ -77,13 +78,22 @@ namespace ComponentsBind
             nodePath.Append(element.selectedComponent.gameObject.name);
             GetNodePath(element.selectedComponent,nodePath);
 
-            luaCode.AppendLine(string.Format("\tself._{0}Path = \"{1}\"", filedStr,nodePath.ToString()));
+            string result = nodePath.ToString();
+            int strIndex1 = result.IndexOf(componentsBind.name + "/");
+            int strIndex2 = componentsBind.name.Length + 1;
+
+            if (strIndex1 == -1)
+                result = string.Empty;
+            else
+                result = result.Substring(strIndex1 + strIndex2);
+
+            luaCode.AppendLine(string.Format("\tself._{0}Path = \"{1}\"", filedStr, result));
         }
 
         public static void GetNodePath(Component component,StringBuilder nodePath)
         {
-            UIComponentsBind parentBind = component.transform.parent.GetComponent<UIComponentsBind>();
-            if (parentBind == null)
+            Transform parentBind = component.transform.parent;
+            if (parentBind != null)
             {
                 nodePath.Insert(0,component.transform.parent.gameObject.name + "/");
                 GetNodePath(component.transform.parent,nodePath);
